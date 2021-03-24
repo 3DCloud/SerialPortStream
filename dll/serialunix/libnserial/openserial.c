@@ -17,7 +17,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <termios.h>
+#include <asm/ioctls.h>
+#include <asm/termbits.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -128,8 +129,8 @@ NSERIAL_EXPORT int WINAPI serial_getproperties(struct serialhandle *handle)
     return -1;
   }
 
-  struct termios tio;
-  if (tcgetattr(handle->fd, &tio) == -1) {
+  struct termios2 tio;
+  if (ioctl(handle->fd, TCGETS2, &tio) < 0) {
     serial_seterror(handle, ERRMSG_SERIALTCGETATTR);
     return -1;
   }
@@ -194,18 +195,14 @@ NSERIAL_EXPORT int WINAPI serial_getproperties(struct serialhandle *handle)
   }
 
   // Get the baud rate
-  handle->cbaud = cfgetispeed(&tio);
-  handle->baudrate = 0;
+  handle->cbaud = BOTHER;
+  handle->baudrate = tio.c_ispeed;
   int i = 0;
-  while (baudrates[i].baud && handle->baudrate == 0) {
-    if (baudrates[i].cbaud == handle->cbaud) {
-      handle->baudrate = baudrates[i].baud;
+  while (baudrates[i].baud && handle->cbaud == BOTHER) {
+    if (baudrates[i].baud == handle->baudrate) {
+      handle->cbaud = baudrates[i].cbaud;
     }
     i++;
-  }
-  if (handle->baudrate == 0) {
-    // This baudrate is not known, so we set the default
-    serial_setdefaultbaud(handle);
   }
 
   return 0;
@@ -225,10 +222,9 @@ NSERIAL_EXPORT int WINAPI serial_setproperties(struct serialhandle *handle)
     return -1;
   }
 
-  struct termios newtio;
+  struct termios2 newtio;
   nslog(handle, NSLOG_DEBUG, "setproperties: getting attributes");
-  if (tcgetattr(handle->fd, &newtio) == -1) {
-    nslog(handle, NSLOG_ERR, "setproperties: tcgetattr failed: errno=%d", errno);
+  if (ioctl(handle->fd, TCGETS2, &newtio) < 0) {
     serial_seterror(handle, ERRMSG_SERIALTCGETATTR);
     return -1;
   }
@@ -375,14 +371,10 @@ NSERIAL_EXPORT int WINAPI serial_setproperties(struct serialhandle *handle)
   }
 
   // Set baudrate. Here we assume first no custom baudrate
-  if (cfsetospeed(&newtio, handle->cbaud) < 0 ||
-      cfsetispeed(&newtio, handle->cbaud) < 0) {
-    serial_seterror(handle, ERRMSG_INVALIDBAUD);
-    errno = EINVAL;
-    return -1;
-  }
-
-  // TODO: Custom baudrates are not currently supported
+  newtio.c_cflag &= ~CBAUD;
+  newtio.c_cflag |= handle->cbaud;
+  newtio.c_ispeed = handle->baudrate;
+  newtio.c_ospeed = handle->baudrate;
 
   // Turn off delays in the system. Read only the data in the serial port.
   newtio.c_cc[VMIN] = 0;
@@ -391,8 +383,8 @@ NSERIAL_EXPORT int WINAPI serial_setproperties(struct serialhandle *handle)
   // Wait until all output written to fd has been transmitted. In case that
   // we've just initialised, there is no output, so is equivalent to TCSANOW.
   nslog(handle, NSLOG_DEBUG, "setproperties: setting attributes");
-  if (tcsetattr(handle->fd, TCSADRAIN, &newtio) < 0) {
-    nslog(handle, NSLOG_ERR, "setproperties: setting attributes failed: errno=%d", errno);
+  // TCSETSW2 is equivalent to tcsetattr(td, TCSADRAIN, &tio) https://linux.die.net/man/4/tty_ioctl
+  if (ioctl(handle->fd, TCSETSW2, &newtio) < 0) {
     serial_seterror(handle, ERRMSG_SERIALTCSETATTR);
     return -1;
   }
@@ -401,14 +393,12 @@ NSERIAL_EXPORT int WINAPI serial_setproperties(struct serialhandle *handle)
   flushbuffer(handle);
 
   // Get the baudrate and compare with what we set
-  tcgetattr(handle->fd, &newtio);
-  if (cfgetispeed(&newtio) != handle->cbaud ||
-      cfgetospeed(&newtio) != handle->cbaud) {
-    nslog(handle, NSLOG_WARNING, "setproperties: baudrate mismatch. "
-	  "ispeed ret=%d set=%d; ospeed ret=%d set=%d",
-	  cfgetispeed(&newtio), handle->cbaud,
-	  cfgetospeed(&newtio), handle->cbaud);
-    // For some reason the baudrate was not set to what we had asked.
+  if (ioctl(handle->fd, TCGETS2, &newtio) < 0) {
+    serial_seterror(handle, ERRMSG_SERIALTCGETATTR);
+    return -1;
+  }
+  if (newtio.c_ispeed != handle->baudrate ||
+      newtio.c_ospeed != handle->baudrate) {
     serial_seterror(handle, ERRMSG_UNEXPECTEDBAUDRATE);
     errno = EIO;
     return -1;
@@ -454,7 +444,7 @@ NSERIAL_EXPORT int WINAPI serial_close(struct serialhandle *handle)
   }
 
   nslog(handle, NSLOG_DEBUG, "close: flushing with TCIOFLUSH");
-  if (tcflush(handle->fd, TCIOFLUSH)) {
+  if (ioctl(handle->fd, TCFLSH, TCIOFLUSH) < 0) {
     nslog(handle, NSLOG_DEBUG, "close: TCIOFLUSH failed: errno=%d", errno);
   }
 

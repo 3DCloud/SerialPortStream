@@ -1,2 +1,26 @@
 bin
 build
+
+# from https://github.com/github/gitignore/blob/master/CMake.gitignore
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# generated
+/libnserial/config.h
+/libnserial/nserialConfig.cmake
+/libnserial/nserialConfigVersion.cmake
+/libnserial/nserialTargets.cmake
+/libnserial/libnserial.so
+/libnserial/libnserial.so.1
+/libnserial/libnserial.so.1.1
+/libnserial/comptest/icount
+/libnserial/comptest/kernelbug

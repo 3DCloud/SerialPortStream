@@ -16,7 +16,9 @@
 
 #include <stdlib.h>
 #include <errno.h>
-#include <termios.h>
+#include <asm/termbits.h>
+#include <asm/ioctls.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #define NSERIAL_EXPORTS
@@ -41,7 +43,7 @@ NSERIAL_EXPORT int WINAPI serial_reset(struct serialhandle *handle)
     return -1;
   }
 
-  tcflush(handle->fd, TCIOFLUSH);
+  ioctl(handle->fd, TCFLSH, TCIOFLUSH);
   flushbuffer(handle);
   return 0;
 }

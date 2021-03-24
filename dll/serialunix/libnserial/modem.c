@@ -16,7 +16,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
-#include <termios.h>
+#include <asm/termbits.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #ifdef HAVE_LINUX_SERIAL_ICOUNTER_STRUCT

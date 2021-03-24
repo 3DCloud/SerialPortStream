@@ -15,7 +15,7 @@
 #include "config.h"
 
 #include <stdlib.h>
-#include <termios.h>
+#include <asm/termbits.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 

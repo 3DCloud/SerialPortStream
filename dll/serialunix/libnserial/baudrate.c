@@ -16,7 +16,7 @@
 
 #include <stdlib.h>
 #include <errno.h>
-#include <termios.h>
+#include <asm/termbits.h>
 
 #define NSERIAL_EXPORTS
 #include "nserial.h"
@@ -184,9 +184,9 @@ NSERIAL_EXPORT int WINAPI serial_setbaud(struct serialhandle *handle, int baud)
     i++;
   }
 
-  serial_seterror(handle, ERRMSG_UNSUPPORTEDBAUDRATE);
-  errno = EINVAL;
-  return -1;
+  handle->baudrate = baud;
+  handle->cbaud = BOTHER;
+  return 0;
 }
 
 NSERIAL_EXPORT int WINAPI serial_getbaud(struct serialhandle *handle, int *baud)
